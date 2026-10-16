@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>日銀ネット 同時決済シミュレータ</title>
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#fffefb; --ink:#141412; --ink2:#5b5a55; --ink3:#8b8a84; --rule:#e2e0d9;
+  --accent:#1f5fae; --accent-ink:#ffffff; --ok:#1a7f4b; --warn:#b26a00; --bad:#b3261e;
+  --q:#eb6834; --flow:#2a78d6; --chip:#f0eee8; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121211; --panel:#1b1b1a; --ink:#efeee9; --ink2:#bdbcb3; --ink3:#86857e; --rule:#2e2e2b;
+    --accent:#5a9bf0; --accent-ink:#0b0b0b; --ok:#45c07e; --warn:#e0a03a; --bad:#f07067;
+    --q:#e07446; --flow:#5a9bf0; --chip:#262624; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121211; --panel:#1b1b1a; --ink:#efeee9; --ink2:#bdbcb3; --ink3:#86857e; --rule:#2e2e2b;
+  --accent:#5a9bf0; --accent-ink:#0b0b0b; --ok:#45c07e; --warn:#e0a03a; --bad:#f07067;
+  --q:#e07446; --flow:#5a9bf0; --chip:#262624; --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif}
+header{padding:20px 16px 8px;max-width:1240px;margin:0 auto}
+h1{font-size:20px;margin:0;letter-spacing:.02em}
+.lead{color:var(--ink2);margin:4px 0 0;max-width:780px}
+main{max-width:1240px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+.panel h2{font-size:13px;margin:0 0 10px;color:var(--ink2);font-weight:600;letter-spacing:.04em}
+.clockbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.clock{font:600 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.badge.on{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.badge.off{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+button,select,input{font:inherit;color:inherit}
+button{border:1px solid var(--rule);background:var(--panel);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--ink3)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input{border:1px solid var(--rule);background:var(--bg);border-radius:8px;padding:6px 8px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row+.row{margin-top:8px}
+label.sw{display:inline-flex;gap:6px;align-items:center;color:var(--ink2);font-size:13px}
+#net{width:100%;max-height:400px;height:auto;display:block;margin:0 auto}
+#net .node circle{fill:var(--panel);stroke:var(--ink3);stroke-width:1.5}
+#net .node text{fill:var(--ink);font-size:13px;font-weight:600}
+#net .node .sub{fill:var(--ink2);font-size:11px;font-weight:400}
+#net .edge{fill:none;stroke:var(--q);opacity:.85}
+#net .edge.flash{stroke:var(--ok);opacity:1}
+#net .elab{fill:var(--ink2);font-size:11px}
+.banks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px}
+.bank{border:1px solid var(--rule);border-radius:10px;padding:10px;background:var(--bg)}
+.bank h3{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between}
+.bank h3 span{color:var(--ink3);font-weight:400;font-size:12px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
+.kv dt{color:var(--ink2)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.neg{color:var(--bad)}
+.queue{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.qi{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;background:var(--chip);border-radius:6px;padding:3px 6px}
+.qi .act{display:flex;gap:2px}
+.qi button{padding:0 6px;font-size:11px;border-radius:5px}
+.qempty{font-size:12px;color:var(--ink3)}
+#log{font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:340px;overflow:auto;margin:0;padding:0;list-style:none}
+#log li{padding:2px 0;border-bottom:1px dashed var(--rule)}
+#log .t{color:var(--ink3);margin-right:6px}
+#log .k{display:inline-block;min-width:5.5em;font-weight:600}
+.k-SETTLE{color:var(--ok)} .k-OFFSET2,.k-OFFSETN{color:var(--accent)} .k-REJECT{color:var(--bad)} .k-QUEUE{color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.stat{background:var(--bg);border:1px solid var(--rule);border-radius:10px;padding:8px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--ink2)}
+details{margin-top:10px;color:var(--ink2);font-size:13px}
+details summary{cursor:pointer;color:var(--ink)}
+.note{font-size:12px;color:var(--ink3);margin-top:10px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<header>
+  <h1>日銀ネット 同時決済シミュレータ</h1>
+  <p class="lead">同時決済口（流動性節約機能付きRTGS）の動きを、手を動かして確かめるための学習用ツールです。支払指図を入れて、待ち行列・二者間探索・多者間探索で何が決済されるかを観察してください。</p>
+</header>
+<main>
+  <section class="panel" aria-label="ネットワーク">
+    <div class="clockbar">
+      <span class="clock" id="clock">09:00</span>
+      <span class="badge" id="lsfState">同時決済口 受付中</span>
+      <span class="badge" id="nextMl">次の多者間探索 11:00</span>
+      <span style="flex:1"></span>
+      <button id="adv30">＋30分</button>
+      <button id="advNext">次の定時探索まで</button>
+    </div>
+    <svg id="net" viewBox="140 10 360 352" role="img" aria-label="参加者と待機中の支払指図のネットワーク図"></svg>
+    <div class="banks" id="banks"></div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel" aria-label="操作">
+      <h2>支払指図を入力</h2>
+      <div class="row">
+        <select id="fDebtor" aria-label="支払人"></select>→
+        <select id="fCreditor" aria-label="受取人"></select>
+        <input id="fAmount" type="number" min="1" step="1" value="50" style="width:90px" aria-label="金額（億円）"> 億円
+      </div>
+      <div class="row">
+        <select id="fCat" aria-label="種類">
+          <option value="LSF">コール等（同時決済口）</option>
+          <option value="LSF_ZG">大口内為（同時決済口）</option>
+          <option value="LSF_FX">外為円（同時決済口）</option>
+          <option value="REG">当座預金振替（通常口）</option>
+        </select>
+        <button class="primary" id="submit">送信</button>
+      </div>
+      <h2 style="margin-top:14px">流動性振替（通常口 → 同時決済口）</h2>
+      <div class="row">
+        <select id="tBank" aria-label="振替する参加者"></select>
+        <input id="tAmount" type="number" min="1" step="1" value="10" style="width:90px" aria-label="振替額（億円）"> 億円
+        <button id="transfer">振替</button>
+        <button id="transferBack" title="同時決済口 → 通常口">戻す</button>
+      </div>
+      <h2 style="margin-top:14px">探索の設定</h2>
+      <div class="row">
+        <label class="sw"><input type="checkbox" id="optBi" checked> 二者間探索（随時）</label>
+        <label class="sw"><input type="checkbox" id="optMlCont"> 多者間探索を随時にする</label>
+        <button id="runMl">多者間探索を今すぐ実行</button>
+      </div>
+      <h2 style="margin-top:14px">プリセット</h2>
+      <div class="row">
+        <button data-preset="grid">4行の循環（グリッドロック）</button>
+        <button data-preset="bi">二者間の相殺</button>
+        <button data-preset="fifo">FIFOの詰まりと並替</button>
+        <button data-preset="rand">ランダム12件</button>
+        <button id="reset">リセット</button>
+      </div>
+      <details>
+        <summary>このツールのルール</summary>
+        <ul>
+          <li>同時決済口には日中当座貸越がありません。払えない指図は待ち行列に入ります。</li>
+          <li>各行の待ち行列は先頭から順に処理します（FIFO）。▲で先頭へ移すと探索が走ります。</li>
+          <li>二者間探索：互いに向き合う先頭指図の組を、同時なら払える場合に一緒に決済します。</li>
+          <li>多者間探索：待機中の指図全体を同時に決済できるか調べ、不足が最大の行の最後尾の指図を外しながら、決済できる最大の組合せを探します。既定では 9:00・11:00・13:00・15:00・16:59 の定時に実行します（モデル値）。</li>
+          <li>17:00 に同時決済口を終了し、未決済の指図は終了、残高は通常口に戻ります（モデル値）。</li>
+          <li>通常口の支払は残高＋日中当座貸越の範囲で即時に決済し、足りなければ拒絶します。</li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="panel" aria-label="統計とログ">
+      <div class="stats">
+        <div class="stat"><b id="sSingle">0</b><span>単独決済</span></div>
+        <div class="stat"><b id="sBi">0</b><span>二者間</span></div>
+        <div class="stat"><b id="sMl">0</b><span>多者間</span></div>
+        <div class="stat"><b id="sQ">0</b><span>待機中</span></div>
+      </div>
+      <h2>イベントログ</h2>
+      <ul id="log" aria-live="polite"></ul>
+      <p class="note">学習用の概念モデルです。実際の日銀ネットの判定ロジック・時刻とは異なります。Python版 <code>bojnet_sim</code> と同じアルゴリズムで動いています。</p>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// ============================================================ モデル
+const BANKS = [
+  {code:"0001", name:"A銀行"}, {code:"0005", name:"B銀行"},
+  {code:"0009", name:"C証券"}, {code:"0017", name:"D信託"}, {code:"0033", name:"E銀行"}];
+const ML_TIMES = [9*60, 11*60, 13*60, 15*60, 16*60+59];
+const LSF_CLOSE = 17*60, CUTOFF = 21*60;
+let S;
+
+function initState(){
+  S = {
+    now: 9*60, seq: 0, closed: false, lsfClosed: false,
+    bal: Object.fromEntries(BANKS.map(b => [b.code, {reg: 50, lsf: 10, limit: 20}])),
+    queue: [], done: new Set(), stats: {single:0, bi:0, ml:0}, flash: new Set(), log: []
+  };
+  ML_TIMES.filter(t => t <= S.now).forEach(t => S.done.add(t));
+}
+const fmt = m => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
+const name = c => BANKS.find(b => b.code === c).name;
+function log(kind, msg){ S.log.unshift({t: fmt(S.now), kind, msg}); if (S.log.length > 200) S.log.pop(); }
+
+const ordered = q => [...q].sort((a, b) => a.pos - b.pos || a.seq - b.seq);
+function heads(){
+  const h = new Map();
+  for (const p of ordered(S.queue)) if (!h.has(p.d)) h.set(p.d, p);
+  return h;
+}
+function settle(p, by){
+  S.bal[p.d].lsf -= p.amt; S.bal[p.c].lsf += p.amt;
+  S.queue = S.queue.filter(x => x !== p);
+  S.stats[by]++; S.flash.add(p.id);
+}
+
+function lsfEvent(){
+  if (S.lsfClosed) return;
+  for (;;){
+    const singles = [...heads().values()].filter(p => S.bal[p.d].lsf >= p.amt);
+    if (singles.length){
+      for (const p of singles){ if (S.bal[p.d].lsf >= p.amt && S.queue.includes(p)){ settle(p, "single"); log("SETTLE", `${p.id} ${name(p.d)}→${name(p.c)} ${p.amt}億 [単独]`); } }
+      continue;
+    }
+    if (document.getElementById("optBi").checked){
+      const h = heads(); let hit = null;
+      for (const [a, pa] of h){
+        const pb = h.get(pa.c);
+        if (pb && pb.c === a && pa.c > a &&
+            S.bal[a].lsf - pa.amt + pb.amt >= 0 && S.bal[pa.c].lsf - pb.amt + pa.amt >= 0){ hit = [pa, pb]; break; }
+      }
+      if (hit){ hit.forEach(p => settle(p, "bi")); log("OFFSET2", `${hit[0].id} ⇄ ${hit[1].id} 二者間同時決済`); continue; }
+    }
+    if (document.getElementById("optMlCont").checked && multilateralOnce()) continue;
+    break;
+  }
+}
+
+function multilateralSet(){
+  const cand = ordered(S.queue);
+  if (cand.length < 2) return [];
+  const byD = {}; const net = {}; const removed = new Set();
+  for (const p of cand){ (byD[p.d] ||= []).push(p); net[p.d] = (net[p.d]||0) - p.amt; net[p.c] = (net[p.c]||0) + p.amt; }
+  let remaining = cand.length;
+  while (remaining >= 2){
+    let worst = null, gap = 0;
+    for (const c in net){ const s = -(S.bal[c].lsf + net[c]); if (s > gap){ worst = c; gap = s; } }
+    if (!worst) return cand.filter(p => !removed.has(p));
+    const last = byD[worst].pop();
+    if (!last) return [];
+    removed.add(last); net[last.d] += last.amt; net[last.c] -= last.amt; remaining--;
+  }
+  return [];
+}
+function multilateralOnce(){
+  const s = multilateralSet();
+  if (!s.length) return false;
+  s.forEach(p => settle(p, "ml"));
+  log("OFFSETN", `${s.length}件を多者間同時決済（${s.map(p => p.id).join(", ")}）`);
+  return true;
+}
+function runMultilateral(label){
+  if (S.lsfClosed) return;
+  if (S.queue.length) log("SEARCH", `${label}（待機 ${S.queue.length} 件）`);
+  while (multilateralOnce()) lsfEvent();
+  lsfEvent();
+}
+
+function submit(d, c, amt, cat){
+  if (S.closed){ log("REJECT", "締切後のため受け付けできません"); return; }
+  if (d === c){ log("REJECT", "支払人と受取人が同じです"); return; }
+  if (!(amt > 0)){ log("REJECT", "金額が不正です"); return; }
+  const id = `P${String(++S.seq).padStart(3,"0")}`;
+  if (cat === "REG"){
+    const b = S.bal[d];
+    if (b.reg + b.limit >= amt){ b.reg -= amt; S.bal[c].reg += amt; log("SETTLE", `${id} 通常口 ${name(d)}→${name(c)} ${amt}億`); }
+    else log("REJECT", `${id} 通常口 残高不足（支払可能 ${b.reg + b.limit}億）`);
+    return;
+  }
+  if (S.lsfClosed){ log("REJECT", `${id} 同時決済口は終了しています`); return; }
+  const label = {LSF:"コール", LSF_ZG:"大口内為", LSF_FX:"外為円"}[cat];
+  S.queue.push({id, d, c, amt, seq: S.seq, pos: S.seq, cat: label});
+  log("QUEUE", `${id} ${label} ${name(d)}→${name(c)} ${amt}億`);
+  lsfEvent();
+}
+function transfer(code, amt, back){
+  if (S.lsfClosed || S.closed){ log("REJECT", "同時決済口の受付時間外です"); return; }
+  const b = S.bal[code];
+  if (!back){
+    if (b.reg + b.limit < amt){ log("REJECT", `${name(code)} 振替額が支払可能額を超えています`); return; }
+    b.reg -= amt; b.lsf += amt; log("XFER", `${name(code)} 通常口→同時決済口 ${amt}億`);
+  } else {
+    if (b.lsf < amt){ log("REJECT", `${name(code)} 同時決済口の残高不足`); return; }
+    b.lsf -= amt; b.reg += amt; log("XFER", `${name(code)} 同時決済口→通常口 ${amt}億`);
+  }
+  lsfEvent();
+}
+function reorder(id, front){
+  const p = S.queue.find(x => x.id === id); if (!p) return;
+  const mine = S.queue.filter(x => x.d === p.d).map(x => x.pos);
+  p.pos = front ? Math.min(...mine) - 1 : Math.max(...mine) + 1;
+  log("REORDER", `${id} を${front ? "先頭" : "最後尾"}へ`);
+  lsfEvent();
+}
+function cancel(id){ S.queue = S.queue.filter(x => x.id !== id); log("CANCEL", id); }
+
+function advance(to){
+  to = Math.min(to, CUTOFF);
+  for (const t of ML_TIMES){
+    if (!S.done.has(t) && t <= to){ S.done.add(t); S.now = t; runMultilateral("定時の多者間探索"); }
+  }
+  if (!S.lsfClosed && to >= LSF_CLOSE){
+    S.now = LSF_CLOSE;
+    const n = S.queue.length; S.queue = [];
+    for (const b of Object.values(S.bal)){ b.reg += b.lsf; b.lsf = 0; }
+    S.lsfClosed = true; log("LSF", `同時決済口 終了（未決済 ${n} 件を終了、残高を通常口へ）`);
+  }
+  if (!S.closed && to >= CUTOFF){ S.now = CUTOFF; S.closed = true; log("EOD", "21:00 締切"); }
+  S.now = to;
+}
+
+// ============================================================ 描画
+const $ = id => document.getElementById(id);
+function render(){
+  $("clock").textContent = fmt(S.now);
+  const st = $("lsfState");
+  st.textContent = S.closed ? "締切済" : S.lsfClosed ? "同時決済口 終了" : "同時決済口 受付中";
+  st.className = "badge " + (S.lsfClosed ? "off" : "on");
+  const nxt = ML_TIMES.find(t => !S.done.has(t));
+  $("nextMl").textContent = nxt && !S.lsfClosed ? `次の多者間探索 ${fmt(nxt)}` : "本日の多者間探索は終了";
+  $("sSingle").textContent = S.stats.single; $("sBi").textContent = S.stats.bi;
+  $("sMl").textContent = S.stats.ml; $("sQ").textContent = S.queue.length;
+
+  // 参加者カード
+  $("banks").innerHTML = BANKS.map(b => {
+    const v = S.bal[b.code];
+    const q = ordered(S.queue).filter(p => p.d === b.code);
+    const qhtml = q.length ? q.map((p, i) => `
+      <div class="qi"><span>${i+1}. →${name(p.c)} <b>${p.amt}</b>億 <span style="color:var(--ink3)">${p.cat}</span></span>
+      <span class="act"><button aria-label="${p.id}を先頭へ" data-front="${p.id}">▲</button><button aria-label="${p.id}を取消" data-cancel="${p.id}">×</button></span></div>`).join("")
+      : `<div class="qempty">待ち行列なし</div>`;
+    const recv = S.queue.filter(p => p.c === b.code).reduce((s, p) => s + p.amt, 0);
+    return `<div class="bank"><h3>${b.name}<span>${b.code}</span></h3>
+      <dl class="kv"><dt>同時決済口</dt><dd>${v.lsf} 億</dd>
+      <dt>通常口</dt><dd class="${v.reg < 0 ? "neg" : ""}">${v.reg} 億</dd>
+      <dt>日中当座貸越極度</dt><dd>${v.limit} 億</dd>
+      <dt>受取予定（待機中）</dt><dd>${recv} 億</dd></dl>
+      <div class="queue">${qhtml}</div></div>`;
+  }).join("");
+
+  // ネットワーク図
+  const W = 640, H = 360, cx = W/2, cy = H/2 + 6, R = 130;
+  const pos = Object.fromEntries(BANKS.map((b, i) => {
+    const a = -Math.PI/2 + i * 2*Math.PI/BANKS.length;
+    return [b.code, [cx + R*Math.cos(a), cy + R*Math.sin(a)]];
+  }));
+  const maxAmt = Math.max(1, ...S.queue.map(p => p.amt));
+  const pairCount = {};
+  let svg = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--q)"/></marker></defs>`;
+  for (const p of ordered(S.queue)){
+    const key = p.d + p.c; const k = (pairCount[key] = (pairCount[key] || 0) + 1);
+    const [x1, y1] = pos[p.d], [x2, y2] = pos[p.c];
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx/len, uy = dy/len;
+    const sx = x1 + ux*34, sy = y1 + uy*34, ex = x2 - ux*36, ey = y2 - uy*36;
+    const bend = 18 + (k-1)*14;
+    const mx = (sx+ex)/2 - uy*bend, my = (sy+ey)/2 + ux*bend;
+    const w = 1.5 + 5 * p.amt / maxAmt;
+    svg += `<path class="edge" d="M${sx},${sy} Q${mx},${my} ${ex},${ey}" stroke-width="${w.toFixed(1)}" marker-end="url(#arr)"><title>${p.id} ${name(p.d)}→${name(p.c)} ${p.amt}億（待機中）</title></path>`;
+    svg += `<text class="elab" x="${mx}" y="${my}" text-anchor="middle">${p.amt}</text>`;
+  }
+  for (const b of BANKS){
+    const [x, y] = pos[b.code];
+    svg += `<g class="node"><circle cx="${x}" cy="${y}" r="32"/><text x="${x}" y="${y-2}" text-anchor="middle">${b.name}</text><text class="sub" x="${x}" y="${y+14}" text-anchor="middle">${S.bal[b.code].lsf}億</text></g>`;
+  }
+  if (!S.queue.length) svg += `<text x="${cx}" y="${cy+4}" text-anchor="middle" fill="var(--ink3)" font-size="12">待機中の指図はありません</text>`;
+  $("net").innerHTML = svg;
+
+  $("log").innerHTML = S.log.map(e => `<li><span class="t">${e.t}</span><span class="k k-${e.kind}">${e.kind}</span>${e.msg}</li>`).join("");
+  S.flash.clear();
+}
+
+// ============================================================ 操作
+function fillSelects(){
+  for (const id of ["fDebtor", "fCreditor", "tBank"])
+    $(id).innerHTML = BANKS.map(b => `<option value="${b.code}">${b.name}</option>`).join("");
+  $("fCreditor").selectedIndex = 1;
+}
+function act(fn){ fn(); render(); }
+$("submit").onclick = () => act(() => submit($("fDebtor").value, $("fCreditor").value, Math.round(+$("fAmount").value), $("fCat").value));
+$("transfer").onclick = () => act(() => transfer($("tBank").value, Math.round(+$("tAmount").value), false));
+$("transferBack").onclick = () => act(() => transfer($("tBank").value, Math.round(+$("tAmount").value), true));
+$("runMl").onclick = () => act(() => runMultilateral("手動の多者間探索"));
+$("adv30").onclick = () => act(() => advance(S.now + 30));
+$("advNext").onclick = () => act(() => { const n = ML_TIMES.find(t => !S.done.has(t)); advance(n ?? LSF_CLOSE); });
+$("reset").onclick = () => act(() => { initState(); log("INFO", "初期状態に戻しました（各行：通常口50億・同時決済口10億・貸越極度20億）"); });
+$("optMlCont").onchange = () => act(() => lsfEvent());
+$("optBi").onchange = () => act(() => lsfEvent());
+$("banks").addEventListener("click", e => {
+  const f = e.target.dataset.front, c = e.target.dataset.cancel;
+  if (f) act(() => reorder(f, true)); else if (c) act(() => cancel(c));
+});
+document.querySelectorAll("[data-preset]").forEach(btn => btn.onclick = () => act(() => {
+  initState();
+  const [A, B, C, D, E] = BANKS.map(b => b.code);
+  const p = btn.dataset.preset;
+  if (p === "grid"){
+    log("INFO", "プリセット：4行が100億ずつ循環的に支払う。各行の同時決済口は10億しかない。");
+    [[A,B],[B,C],[C,D],[D,A]].forEach(([d,c]) => submit(d, c, 100, "LSF"));
+    log("INFO", "→ 単独でも二者間でも解けない。「次の定時探索まで」または「多者間探索を今すぐ実行」を押してみてください。");
+  } else if (p === "bi"){
+    log("INFO", "プリセット：A→B 60億、B→A 55億。単独では払えないが、二者間探索で即座に決済される。");
+    submit(A, B, 60, "LSF"); submit(B, A, 55, "LSF");
+  } else if (p === "fifo"){
+    log("INFO", "プリセット：A銀行の先頭に大きな指図（80億）、後ろに小さな指図（5億）。FIFOのため小さい方も詰まる。");
+    submit(A, B, 80, "LSF"); submit(A, C, 5, "LSF");
+    log("INFO", "→ A銀行のカードで 5億 の指図の ▲ を押して先頭に移すと、すぐ決済されます。");
+  } else if (p === "rand"){
+    log("INFO", "プリセット：ランダムな12件の指図。");
+    for (let i = 0; i < 12; i++){
+      const d = BANKS[Math.floor(Math.random()*5)].code; let c = d;
+      while (c === d) c = BANKS[Math.floor(Math.random()*5)].code;
+      submit(d, c, 5 + Math.floor(Math.random()*60), "LSF");
+    }
+  }
+}));
+
+initState(); fillSelects();
+log("INFO", "各行：通常口50億・同時決済口10億・日中当座貸越極度20億で開始。プリセットから試すのがおすすめです。");
+render();
+</script>
+</body>
+</html>
